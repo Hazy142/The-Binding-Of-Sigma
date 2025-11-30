@@ -52,6 +52,8 @@ export interface Entity {
   isActive: boolean;
   /** List of active modifiers affecting the entity (e.g., 'TRIPLE_SHOT'). */
   modifiers: string[]; // 'TRIPLE_SHOT', 'PIERCING', 'BIG_TEARS'
+  /** The direction the entity is facing (0-7). 0 is South/Down. */
+  facing: number;
 }
 
 /**
