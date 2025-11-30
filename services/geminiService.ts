@@ -1,11 +1,22 @@
 import { GoogleGenAI } from "@google/genai";
 
+/**
+ * Initializes and returns the Google Generative AI client using the API key from environment variables.
+ * @returns {GoogleGenAI | null} The GoogleGenAI instance or null if the API key is missing.
+ */
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
   return new GoogleGenAI({ apiKey });
 };
 
+/**
+ * Generates a humorous, Gen Alpha slang-filled description for a game item using the Gemini API.
+ *
+ * @param {string} itemName - The name of the item to describe.
+ * @param {string} itemEffect - A brief description of the item's effect to guide the generation.
+ * @returns {Promise<string>} A promise that resolves to the generated description string.
+ */
 export const generateItemDescription = async (itemName: string, itemEffect: string): Promise<string> => {
   const ai = getClient();
   if (!ai) {
@@ -28,6 +39,11 @@ export const generateItemDescription = async (itemName: string, itemEffect: stri
   }
 };
 
+/**
+ * Generates a threatening but slang-heavy taunt from a boss using the Gemini API.
+ *
+ * @returns {Promise<string>} A promise that resolves to the generated taunt string.
+ */
 export const generateBossTaunt = async (): Promise<string> => {
   const ai = getClient();
   if (!ai) return "I'm gonna tax your health!";
