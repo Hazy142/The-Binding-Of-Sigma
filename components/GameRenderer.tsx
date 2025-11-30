@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Entity, Room, Vector2, Direction, Projectile, Item } from '../types';
 import { 
   CANVAS_WIDTH, CANVAS_HEIGHT, COLOR_BG, COLOR_WALL, COLOR_DOOR, 
@@ -24,6 +24,43 @@ interface GameRendererProps {
   onKeyUp: (key: string) => void;
 }
 
+// Asset Paths
+const ASSETS = {
+  player: '/assets/characters/player/player1_',
+  enemyBasic: '/assets/characters/enemy_basic/char01_',
+  enemyShooter: '/assets/characters/enemy_shooter/char02_',
+  enemyDasher: '/assets/characters/enemy_dasher/char03_',
+  enemyTank: '/assets/characters/enemy_tank/char04_',
+  floor: '/assets/environment/floors/ground02_0001.png', // Main floor tile
+  floorVariations: [
+    '/assets/environment/floors/ground02_0000.png',
+    '/assets/environment/floors/ground02_0001.png',
+    '/assets/environment/floors/ground02_0002.png',
+    '/assets/environment/floors/ground02_0003.png',
+    '/assets/environment/floors/ground02_0004.png',
+    '/assets/environment/floors/ground02_0005.png',
+    '/assets/environment/floors/ground02_0006.png',
+    '/assets/environment/floors/ground02_0007.png'
+  ],
+  walls: {
+      v: '/assets/environment/walls/wallStone01_0004.png', // Vertical (Side)
+      h: '/assets/environment/walls/wallStone01_0001.png', // Horizontal (Top/Bottom)
+      corner: '/assets/environment/walls/wallStone01_0000.png' // Corner? Just guessing or reusing
+  },
+  door: {
+      closed: '/assets/environment/doors/doorA0001.png', // Using one sprite for now
+      open: '/assets/environment/doors/doorA0000.png'
+  }
+};
+
+/**
+ * Helper to get sprite path based on facing.
+ * Format: path + 000X + .png
+ */
+const getSpritePath = (base: string, facing: number) => {
+    return `${base}000${facing}.png`;
+};
+
 /**
  * Renders the game world onto a generic HTML5 Canvas.
  * Handles the main render loop using requestAnimationFrame and manages input event listeners.
@@ -39,6 +76,50 @@ const GameRenderer: React.FC<GameRendererProps> = ({
   onKeyUp 
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
+
+  // Load Assets
+  useEffect(() => {
+    const loadImages = async () => {
+        const pathsToLoad: string[] = [];
+
+        // Characters (0-7)
+        for(let i=0; i<8; i++) {
+            pathsToLoad.push(getSpritePath(ASSETS.player, i));
+            pathsToLoad.push(getSpritePath(ASSETS.enemyBasic, i));
+            pathsToLoad.push(getSpritePath(ASSETS.enemyShooter, i));
+            pathsToLoad.push(getSpritePath(ASSETS.enemyDasher, i));
+            pathsToLoad.push(getSpritePath(ASSETS.enemyTank, i));
+        }
+
+        // Environment
+        ASSETS.floorVariations.forEach(p => pathsToLoad.push(p));
+        pathsToLoad.push(ASSETS.walls.v);
+        pathsToLoad.push(ASSETS.walls.h);
+        pathsToLoad.push(ASSETS.door.closed);
+        pathsToLoad.push(ASSETS.door.open);
+
+        const promises = pathsToLoad.map(path => {
+            return new Promise<void>((resolve, reject) => {
+                const img = new Image();
+                img.src = path;
+                img.onload = () => {
+                    imageCache.current.set(path, img);
+                    resolve();
+                };
+                img.onerror = () => {
+                    console.warn(`Failed to load asset: ${path}`);
+                    resolve(); // Continue anyway
+                };
+            });
+        });
+
+        await Promise.all(promises);
+        setImagesLoaded(true);
+    };
+    loadImages();
+  }, []);
 
   // Input listeners
   useEffect(() => {
@@ -65,26 +146,93 @@ const GameRenderer: React.FC<GameRendererProps> = ({
 
     const render = () => {
       // Clear Screen
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = '#1a1a1a'; // Darker background for outside room
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // Draw Room Floor
-      ctx.fillStyle = COLOR_BG;
-      ctx.fillRect(50, 50, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 100);
+      if (!imagesLoaded) {
+          ctx.fillStyle = 'white';
+          ctx.fillText("Loading Assets...", CANVAS_WIDTH/2, CANVAS_HEIGHT/2);
+          animationFrameId = requestAnimationFrame(render);
+          return;
+      }
 
-      // Draw Walls (Visual only, logic handled in parent)
-      ctx.strokeStyle = COLOR_WALL;
-      ctx.lineWidth = 10;
-      ctx.strokeRect(50, 50, CANVAS_WIDTH - 100, CANVAS_HEIGHT - 100);
+      // --- Draw Environment ---
+
+      const WALL_THICKNESS = 50;
+      const START_X = WALL_THICKNESS;
+      const START_Y = WALL_THICKNESS;
+      const ROOM_W = CANVAS_WIDTH - WALL_THICKNESS * 2;
+      const ROOM_H = CANVAS_HEIGHT - WALL_THICKNESS * 2;
+
+      // Draw Floor (Tiled)
+      const floorImg = imageCache.current.get(ASSETS.floor);
+      if (floorImg) {
+          const pattern = ctx.createPattern(floorImg, 'repeat');
+          if (pattern) {
+              ctx.fillStyle = pattern;
+              ctx.save();
+              ctx.translate(START_X, START_Y);
+              ctx.fillRect(0, 0, ROOM_W, ROOM_H);
+              ctx.restore();
+          }
+      } else {
+          ctx.fillStyle = COLOR_BG;
+          ctx.fillRect(START_X, START_Y, ROOM_W, ROOM_H);
+      }
+
+      // Draw Walls (Perimeter)
+      // Top & Bottom
+      const wallH = imageCache.current.get(ASSETS.walls.h);
+      if (wallH) {
+         for(let x = 0; x < CANVAS_WIDTH; x += 64) {
+             ctx.drawImage(wallH, x, 0, 64, WALL_THICKNESS); // Top
+             ctx.drawImage(wallH, x, CANVAS_HEIGHT - WALL_THICKNESS, 64, WALL_THICKNESS); // Bottom
+         }
+      }
+
+      // Left & Right
+      const wallV = imageCache.current.get(ASSETS.walls.v);
+      if (wallV) {
+         for(let y = 0; y < CANVAS_HEIGHT; y += 64) {
+             ctx.drawImage(wallV, 0, y, WALL_THICKNESS, 64); // Left
+             ctx.drawImage(wallV, CANVAS_WIDTH - WALL_THICKNESS, y, WALL_THICKNESS, 64); // Right
+         }
+      }
 
       // Draw Doors
-      const doorSize = 60;
-      ctx.fillStyle = currentRoom.cleared ? COLOR_DOOR : '#2a2a2a'; // Locked vs Open visual
+      const doorSize = 80;
+      const doorImgClosed = imageCache.current.get(ASSETS.door.closed);
+      const doorImgOpen = imageCache.current.get(ASSETS.door.open);
       
-      if (currentRoom.doors[Direction.UP]) ctx.fillRect((CANVAS_WIDTH / 2) - (doorSize / 2), 20, doorSize, 40);
-      if (currentRoom.doors[Direction.DOWN]) ctx.fillRect((CANVAS_WIDTH / 2) - (doorSize / 2), CANVAS_HEIGHT - 60, doorSize, 40);
-      if (currentRoom.doors[Direction.LEFT]) ctx.fillRect(20, (CANVAS_HEIGHT / 2) - (doorSize / 2), 40, doorSize);
-      if (currentRoom.doors[Direction.RIGHT]) ctx.fillRect(CANVAS_WIDTH - 60, (CANVAS_HEIGHT / 2) - (doorSize / 2), 40, doorSize);
+      // Logic: If room cleared, use Open sprite? Or generic visual for "Open Doorway"?
+      // For now, let's use the door sprite.
+      // Note: Door sprites usually have specific orientation.
+      // Assuming 'doorA0001' is generic closed, 'doorA0000' is generic open.
+      const doorSprite = currentRoom.cleared ? doorImgOpen : doorImgClosed;
+
+      if (doorSprite) {
+        if (currentRoom.doors[Direction.UP]) {
+            ctx.drawImage(doorSprite, (CANVAS_WIDTH - doorSize)/2, 0, doorSize, 60);
+        }
+        if (currentRoom.doors[Direction.DOWN]) {
+            ctx.drawImage(doorSprite, (CANVAS_WIDTH - doorSize)/2, CANVAS_HEIGHT - 60, doorSize, 60);
+        }
+        if (currentRoom.doors[Direction.LEFT]) {
+            ctx.save();
+            ctx.translate(60, (CANVAS_HEIGHT - doorSize)/2 + doorSize);
+            ctx.rotate(-Math.PI/2);
+            ctx.drawImage(doorSprite, 0, 0, doorSize, 60);
+            ctx.restore();
+        }
+        if (currentRoom.doors[Direction.RIGHT]) {
+            ctx.save();
+            ctx.translate(CANVAS_WIDTH - 60, (CANVAS_HEIGHT - doorSize)/2);
+            ctx.rotate(Math.PI/2);
+            ctx.drawImage(doorSprite, 0, 0, doorSize, 60);
+            ctx.restore();
+        }
+      }
+
 
       // Draw Items
       currentRoom.items.forEach(item => {
@@ -99,7 +247,7 @@ const GameRenderer: React.FC<GameRendererProps> = ({
           ctx.shadowBlur = 20;
           ctx.shadowColor = 'rgba(255, 215, 0, 0.5)';
 
-          // --- UNIQUE ITEM RENDERING ---
+          // --- UNIQUE ITEM RENDERING (Canvas Fallbacks for Memes) ---
           
           if (item.itemType === 'HEALTH') {
             // HEART
@@ -227,133 +375,32 @@ const GameRenderer: React.FC<GameRendererProps> = ({
         ctx.save();
         
         // Simple wobble animation
-        const wobble = Math.sin(Date.now() / 200) * 2;
-        ctx.translate(enemy.position.x, enemy.position.y + wobble);
+        // const wobble = Math.sin(Date.now() / 200) * 2;
+        // ctx.translate(enemy.position.x, enemy.position.y + wobble);
+        ctx.translate(enemy.position.x, enemy.position.y);
 
         let color = COLOR_ENEMY;
         let size = enemy.size;
 
         if (enemy.type === 'BOSS') {
+            // ... Boss rendering (Custom) ...
             color = COLOR_BOSS;
-            size = enemy.size * 1.5; // Visual scale
-            ctx.scale(1.5, 1.5); // Scale the context for boss
-        } else if (enemy.variant === 'SHOOTER') {
-            color = COLOR_ENEMY_SHOOTER;
-        } else if (enemy.variant === 'DASHER') {
-            color = COLOR_ENEMY_DASHER;
-        } else if (enemy.variant === 'TANK') {
-            color = COLOR_ENEMY_TANK;
-        }
-
-        // --- SKINS ---
-        
-        if (enemy.variant === 'SHOOTER') {
-            // CULTIST / WIZARD
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(0, -size/2);
-            ctx.lineTo(size/2, size/2);
-            ctx.lineTo(-size/2, size/2);
-            ctx.fill();
-
-            // Hood Shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
-            ctx.beginPath();
-            ctx.moveTo(0, -size/2 + 5);
-            ctx.lineTo(size/4, size/2);
-            ctx.lineTo(-size/4, size/2);
-            ctx.fill();
-
-            // Cyclops Eye
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(0, -2, 5, 0, Math.PI*2);
-            ctx.fill();
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            ctx.arc(0, -2, 2, 0, Math.PI*2);
-            ctx.fill();
-
-        } else if (enemy.variant === 'DASHER') {
-            // SPIKE / HORNET
-            ctx.fillStyle = color;
-            // Diamond body
-            ctx.beginPath();
-            ctx.moveTo(0, -size/2);
-            ctx.lineTo(size/2, 0);
-            ctx.lineTo(0, size/2);
-            ctx.lineTo(-size/2, 0);
-            ctx.fill();
-
-            // Spikes/Wings
-            ctx.fillStyle = '#b45309'; // Dark orange/brown
-            ctx.beginPath();
-            ctx.moveTo(-size/2, 0);
-            ctx.lineTo(-size, -10); // Wing tip left
-            ctx.lineTo(-size/2 + 5, -5);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(size/2, 0);
-            ctx.lineTo(size, -10); // Wing tip right
-            ctx.lineTo(size/2 - 5, -5);
-            ctx.fill();
-
-            // Angry Eyes
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            ctx.moveTo(-8, -5);
-            ctx.lineTo(-2, 0); 
-            ctx.lineTo(-8, 2);
-            ctx.moveTo(8, -5);
-            ctx.lineTo(2, 0); 
-            ctx.lineTo(8, 2);
-            ctx.fill();
-
-        } else if (enemy.variant === 'TANK') {
-            // BLOCKY GOLEM
-            ctx.fillStyle = color;
-            // Main body
-            ctx.fillRect(-size/2, -size/2, size, size);
+            size = enemy.size * 1.5;
+            ctx.scale(1.5, 1.5);
             
-            // Armor Plates
-            ctx.strokeStyle = '#0f3d1e';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(-size/2 + 4, -size/2 + 4, size - 8, size - 8);
-
-            // Rivets
-            ctx.fillStyle = '#0f3d1e';
-            const r = 3;
-            ctx.fillRect(-size/2 + 2, -size/2 + 2, r, r);
-            ctx.fillRect(size/2 - 5, -size/2 + 2, r, r);
-            ctx.fillRect(-size/2 + 2, size/2 - 5, r, r);
-            ctx.fillRect(size/2 - 5, size/2 - 5, r, r);
-
-            // Visor
-            ctx.fillStyle = '#000';
-            ctx.fillRect(-10, -4, 20, 6);
-            ctx.fillStyle = 'red';
-            ctx.fillRect(-2, -4, 4, 6); // Cylon eye
-
-        } else if (enemy.type === 'BOSS') {
-            // SKULL KING
-            ctx.fillStyle = color; // Dark Red
-            
-            // Skull Shape
+            // SKULL KING (Canvas)
+            ctx.fillStyle = color;
             ctx.beginPath();
-            ctx.arc(0, -10, size/2, 0, Math.PI, true); // Cranium
-            ctx.lineTo(size/2, 15); // Jaw Right
-            ctx.quadraticCurveTo(0, 25, -size/2, 15); // Jaw Bottom
-            ctx.lineTo(-size/2, -10); // Jaw Left
+            ctx.arc(0, -10, size/2, 0, Math.PI, true);
+            ctx.lineTo(size/2, 15);
+            ctx.quadraticCurveTo(0, 25, -size/2, 15);
+            ctx.lineTo(-size/2, -10);
             ctx.fill();
-
-            // Eye Sockets
             ctx.fillStyle = '#000';
             ctx.beginPath();
             ctx.ellipse(-12, -5, 8, 10, -0.2, 0, Math.PI*2);
             ctx.ellipse(12, -5, 8, 10, 0.2, 0, Math.PI*2);
             ctx.fill();
-
-            // Glowing Red Pupils
             ctx.fillStyle = '#ff0000';
             ctx.shadowBlur = 10;
             ctx.shadowColor = 'red';
@@ -362,16 +409,12 @@ const GameRenderer: React.FC<GameRendererProps> = ({
             ctx.arc(12, -5, 3, 0, Math.PI*2);
             ctx.fill();
             ctx.shadowBlur = 0;
-
-            // Nose
             ctx.fillStyle = '#000';
             ctx.beginPath();
             ctx.moveTo(0, 5);
             ctx.lineTo(-4, 12);
             ctx.lineTo(4, 12);
             ctx.fill();
-
-            // Teeth
             ctx.fillStyle = '#fff';
             ctx.fillRect(-10, 18, 4, 6);
             ctx.fillRect(-4, 18, 4, 6);
@@ -379,23 +422,27 @@ const GameRenderer: React.FC<GameRendererProps> = ({
             ctx.fillRect(8, 18, 4, 6);
 
         } else {
-            // BASIC BLOB
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(0, 0, size/2, 0, Math.PI*2);
-            ctx.fill();
+            // SPRITE ENEMIES
+            let basePath = ASSETS.enemyBasic;
+            if (enemy.variant === 'SHOOTER') basePath = ASSETS.enemyShooter;
+            if (enemy.variant === 'DASHER') basePath = ASSETS.enemyDasher;
+            if (enemy.variant === 'TANK') basePath = ASSETS.enemyTank;
 
-            // Dead Eyes
-            ctx.fillStyle = '#000';
-            ctx.font = '14px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('x  x', 0, -2);
+            const spritePath = getSpritePath(basePath, enemy.facing);
+            const img = imageCache.current.get(spritePath);
             
-            // Mouth
-            ctx.beginPath();
-            ctx.arc(0, 8, 4, 0, Math.PI, true); // Frown
-            ctx.stroke();
+            if (img) {
+                // Determine scale (sprites might be large)
+                // Assuming sprites are reasonably sized, but let's constrain them to size * 2 for visual pop
+                const drawSize = size * 2.5;
+                ctx.drawImage(img, -drawSize/2, -drawSize/2 - 20, drawSize, drawSize); // -20 offset for pseudo-3D anchor at feet
+            } else {
+                // Fallback
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(0, 0, size/2, 0, Math.PI*2);
+                ctx.fill();
+            }
         }
 
         ctx.restore();
@@ -405,28 +452,19 @@ const GameRenderer: React.FC<GameRendererProps> = ({
       ctx.save();
       ctx.translate(player.position.x, player.position.y);
       
-      ctx.fillStyle = COLOR_PLAYER;
-      // Head
-      ctx.beginPath();
-      ctx.arc(0, 0, PLAYER_SIZE / 2, 0, Math.PI * 2);
-      ctx.fill();
-      // Body
-      ctx.fillStyle = '#e8bfb5';
-      ctx.fillRect(-10, 10, 20, 12);
+      const playerSpritePath = getSpritePath(ASSETS.player, player.facing);
+      const playerImg = imageCache.current.get(playerSpritePath);
       
-      // Tears (Eyes)
-      ctx.fillStyle = '#000';
-      ctx.beginPath();
-      ctx.arc(-6, -2, 4, 0, Math.PI * 2);
-      ctx.arc(6, -2, 4, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Reflection in eyes (Cute factor)
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(-5, -3, 1.5, 0, Math.PI * 2);
-      ctx.arc(7, -3, 1.5, 0, Math.PI * 2);
-      ctx.fill();
+      if (playerImg) {
+          const drawSize = player.size * 2.5;
+          ctx.drawImage(playerImg, -drawSize/2, -drawSize/2 - 20, drawSize, drawSize);
+      } else {
+          // Fallback
+          ctx.fillStyle = COLOR_PLAYER;
+          ctx.beginPath();
+          ctx.arc(0, 0, PLAYER_SIZE / 2, 0, Math.PI * 2);
+          ctx.fill();
+      }
 
       ctx.restore();
 
@@ -482,7 +520,7 @@ const GameRenderer: React.FC<GameRendererProps> = ({
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [player, currentRoom, projectiles]);
+  }, [player, currentRoom, projectiles, imagesLoaded]);
 
   return (
     <canvas 

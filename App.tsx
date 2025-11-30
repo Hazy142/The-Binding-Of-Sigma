@@ -33,6 +33,23 @@ const checkCollision = (a: Entity, b: Entity) => {
   return dist < (a.size / 2 + b.size / 2);
 };
 
+/**
+ * Calculates the 8-way direction index (0-7) from a velocity vector.
+ */
+const getFacingFromVelocity = (vx: number, vy: number, currentFacing: number): number => {
+    if (Math.abs(vx) < 0.1 && Math.abs(vy) < 0.1) return currentFacing;
+
+    // Angle in radians, 0 is East, increasing clockwise (since Y is down)
+    const angle = Math.atan2(vy, vx);
+    let deg = angle * (180 / Math.PI);
+    if (deg < 0) deg += 360;
+
+    const index = Math.floor(((deg + 22.5) % 360) / 45);
+
+    // 0(East) -> 6, 2(South) -> 0, 4(West) -> 2, 6(North) -> 4
+    return (index - 2 + 8) % 8;
+};
+
 // --- Initial State Generators ---
 
 /**
@@ -51,7 +68,8 @@ const createPlayer = (): Entity => ({
   damage: 3.5,
   speed: PLAYER_BASE_SPEED,
   isActive: true,
-  modifiers: []
+  modifiers: [],
+  facing: 0
 });
 
 /**
@@ -219,7 +237,8 @@ const generateDungeon = (targetCount: number): Room[] => {
              speed: spd,
              isActive: true,
              modifiers: [],
-             attackCooldown: Math.random() * 2000 // Random start time
+             attackCooldown: Math.random() * 2000, // Random start time
+             facing: 0
            });
         }
       }
@@ -437,6 +456,9 @@ const App: React.FC = () => {
     if (len > 1.0) { dx /= len; dy /= len; } 
     else if (len < 0.1) { dx = 0; dy = 0; }
 
+    // Update Facing
+    const nextFacing = getFacingFromVelocity(dx, dy, playerState.facing);
+
     let nextX = playerState.position.x + dx * playerState.speed;
     let nextY = playerState.position.y + dy * playerState.speed;
 
@@ -592,6 +614,9 @@ const App: React.FC = () => {
             }
         }
 
+        // Calculate Enemy Facing
+        const enemyFacing = getFacingFromVelocity(vx, vy, enemy.facing);
+
         let eX = enemy.position.x + vx;
         let eY = enemy.position.y + vy;
 
@@ -640,7 +665,7 @@ const App: React.FC = () => {
             }
         }
 
-        return { ...enemy, position: { x: eX, y: eY } };
+        return { ...enemy, position: { x: eX, y: eY }, facing: enemyFacing };
     });
 
     // Move Projectiles & Check Enemy Projectiles vs Player
@@ -723,7 +748,7 @@ const App: React.FC = () => {
         }
     } else {
         // Normal Frame
-        setPlayer(p => ({ ...p, position: { x: nextX, y: nextY }, health: nextPlayerHealth }));
+        setPlayer(p => ({ ...p, position: { x: nextX, y: nextY }, health: nextPlayerHealth, facing: nextFacing }));
         
         const newRooms = [...roomsRef.current];
         if (newRooms[currentRoomIndexRef.current]) {
