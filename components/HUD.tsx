@@ -2,14 +2,29 @@ import React from 'react';
 import { GameStats, Room } from '../types';
 import { COLOR_ITEM_ROOM } from '../constants';
 
+/**
+ * Props for the HUD component.
+ */
 interface HUDProps {
+  /** The current player statistics (Damage, Speed, etc.). */
   stats: GameStats;
+  /** The room the player is currently in. */
   currentRoom: Room;
+  /** List of all rooms in the dungeon (for the minimap). */
   rooms: Room[];
+  /** Current player health. */
   health: number;
+  /** Maximum player health. */
   maxHealth: number;
 }
 
+/**
+ * Heads-Up Display (HUD) component.
+ * Renders the player's health (hearts), current stats, and a minimap of the dungeon.
+ *
+ * @param {HUDProps} props - The component props.
+ * @returns {JSX.Element} The rendered HUD overlay.
+ */
 const HUD: React.FC<HUDProps> = ({ stats, currentRoom, rooms, health, maxHealth }) => {
   return (
     <div className="absolute top-0 left-0 w-full p-4 flex justify-between pointer-events-none text-white">

@@ -14,13 +14,31 @@ import Joystick from './components/Joystick';
 import { generateItemDescription, generateBossTaunt } from './services/geminiService';
 
 // --- Utilities ---
+/**
+ * Calculates the Euclidean distance between two points.
+ * @param {Vector2} a - The first point.
+ * @param {Vector2} b - The second point.
+ * @returns {number} The distance between a and b.
+ */
 const getDistance = (a: Vector2, b: Vector2) => Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2));
+
+/**
+ * Checks if two entities are colliding based on their positions and sizes (circle collision).
+ * @param {Entity} a - The first entity.
+ * @param {Entity} b - The second entity.
+ * @returns {boolean} True if the entities overlap, false otherwise.
+ */
 const checkCollision = (a: Entity, b: Entity) => {
   const dist = getDistance(a.position, b.position);
   return dist < (a.size / 2 + b.size / 2);
 };
 
 // --- Initial State Generators ---
+
+/**
+ * Creates a new player entity with default starting stats.
+ * @returns {Entity} The initialized player entity.
+ */
 const createPlayer = (): Entity => ({
   id: 'player',
   type: 'PLAYER',
@@ -36,7 +54,14 @@ const createPlayer = (): Entity => ({
   modifiers: []
 });
 
-// Robust Dungeon Generator ensuring specific room count
+/**
+ * Generates a dungeon layout with a specified number of rooms.
+ * Uses a random walk algorithm to place rooms, ensuring connectivity.
+ * Also assigns special rooms (Boss, Item).
+ *
+ * @param {number} targetCount - The number of rooms to generate.
+ * @returns {Room[]} An array of generated Room objects, linked by coordinates.
+ */
 const generateDungeon = (targetCount: number): Room[] => {
   const rooms: Room[] = [];
   const visited = new Map<string, {x: number, y: number}>();
@@ -228,7 +253,12 @@ const generateDungeon = (targetCount: number): Room[] => {
   return rooms;
 };
 
-
+/**
+ * The main application component.
+ * Manages the entire game state, game loop, input handling, and UI coordination.
+ *
+ * @returns {JSX.Element} The root component of the game.
+ */
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
   const [player, setPlayer] = useState<Entity>(createPlayer());

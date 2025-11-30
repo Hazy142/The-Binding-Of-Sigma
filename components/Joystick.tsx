@@ -1,12 +1,25 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Vector2 } from '../types';
 
+/**
+ * Props for the Joystick component.
+ */
 interface JoystickProps {
+  /** Callback function triggered when the joystick is moved. returns a normalized vector (-1 to 1). */
   onMove: (vector: Vector2) => void;
+  /** Color of the joystick knob and border. Defaults to 'white'. */
   color?: string;
+  /** Optional label text displayed in the center of the joystick. */
   label?: string;
 }
 
+/**
+ * A virtual joystick component for touch interactions (also supports mouse).
+ * Provides a normalized vector output based on the knob's position relative to the center.
+ *
+ * @param {JoystickProps} props - The component props.
+ * @returns {JSX.Element} The rendered joystick component.
+ */
 const Joystick: React.FC<JoystickProps> = ({ onMove, color = 'white', label }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });

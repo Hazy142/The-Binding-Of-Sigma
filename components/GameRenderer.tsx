@@ -8,14 +8,29 @@ import {
   PLAYER_SIZE, ENEMY_SIZE, PROJECTILE_SIZE, ITEM_SIZE 
 } from '../constants';
 
+/**
+ * Props for the GameRenderer component.
+ */
 interface GameRendererProps {
+  /** The player entity to render. */
   player: Entity;
+  /** The current room data (walls, enemies, items). */
   currentRoom: Room;
+  /** List of active projectiles to render. */
   projectiles: Projectile[];
+  /** Callback for key down events (forwarded from window listeners). */
   onKeyDown: (key: string) => void;
+  /** Callback for key up events (forwarded from window listeners). */
   onKeyUp: (key: string) => void;
 }
 
+/**
+ * Renders the game world onto a generic HTML5 Canvas.
+ * Handles the main render loop using requestAnimationFrame and manages input event listeners.
+ *
+ * @param {GameRendererProps} props - The component props.
+ * @returns {JSX.Element} A canvas element containing the game visual.
+ */
 const GameRenderer: React.FC<GameRendererProps> = ({ 
   player, 
   currentRoom, 
